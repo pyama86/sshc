@@ -11,6 +11,7 @@ import (
 	"github.com/kevinburke/ssh_config"
 	"github.com/mitchellh/go-homedir"
 	"golang.org/x/crypto/ssh"
+	"golang.org/x/crypto/ssh/knownhosts"
 )
 
 // Config return SSH Client config
@@ -85,10 +86,15 @@ func (c *Config) DialWithConfig() (*ssh.Client, error) {
 	}
 	auth = append(auth, ssh.PublicKeys(signer))
 
+	hostsKeyCallback, err := getHostKeyCallBack()
+	if err != nil {
+		return nil, err
+	}
+
 	sshConfig := &ssh.ClientConfig{
 		User:            user,
 		Auth:            auth,
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(), // FIXME
+		HostKeyCallback: hostsKeyCallback,
 	}
 
 	proxyCommand := ssh_config.Get(host, "ProxyCommand")
@@ -150,4 +156,21 @@ func (c *Config) getIdentityFile() (string, error) {
 		}
 	}
 	return strings.Replace(keyPath, "~", homeDir, 1), nil
+}
+
+func getHostKeyCallBack() (ssh.HostKeyCallback, error) {
+	knownHostsFilePath := "~/.ssh/known_hosts"
+	homeDir, err := homedir.Dir()
+	absPath := strings.Replace(knownHostsFilePath, "~", homeDir, 1)
+	if _, err := os.Lstat(absPath); err != nil {
+		return ssh.InsecureIgnoreHostKey(), err
+	}
+	if err != nil {
+		return ssh.InsecureIgnoreHostKey(), err
+	}
+	return knownhosts.New(absPath)
+	// return func(hostname string, remote net.Addr, key ssh.PublicKey) error {
+	// 	fmt.Printf("%s %#v %s\n", hostname, remote, key)
+	// 	return nil
+	// }, nil
 }
